@@ -160,15 +160,16 @@ void *car_cross(void *arg) {
     l = l;
 
     while(1){
+            /*try to get access to the intersection if there is car in the buffer, wait otherwise*/
+	    pthread_mutex_lock(&(l->lock));
+ 
 
             /*all in_cars have finished crossing*/
             if(l->in_cars == NULL && l->passed == l->inc){
+                pthread_mutex_unlock(&(l->lock));
                 break; 
             }
-       
-	    /*try to get access to the intersection if there is car in the buffer, wait otherwise*/
-	    pthread_mutex_lock(&(l->lock));
-	    
+       	    
 	    /*check if there is any car waiting in the buffer*/    
 	    while(l->in_buf == 0){
 		pthread_cond_wait(&(l->consumer_cv),&(l->lock));      
