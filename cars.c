@@ -59,13 +59,13 @@ void init_intersection() {
     /*initialize p_thread_mutex*/    
     int i;
     for(i = 0; i < 4; i++){
-        (isection.quad)[i] = PTHREAD_MUTEX_INITIALIZER;
+        pthread_mutex_init(&((isection.quad)[i]), NULL);
     }
 
     /*initialize all four lanes*/
     int j;
     for(j = 0; j < 4; j++){
-        (isection.lanes)[j].lock = PTHREAD_MUTEX_INITIALIZER;
+        pthread_mutex_init(&((isection.lanes)[j].lock), NULL);
         (isection.lanes)[j].in_cars = NULL;
         (isection.lanes)[j].out_cars = NULL;
         (isection.lanes)[j].inc = 0;
@@ -78,7 +78,7 @@ void init_intersection() {
         (isection.lanes)[j].head = 0;
         (isection.lanes)[j].tail = -1;
         (isection.lanes)[j].capacity = LANE_LENGTH;
-        (isection.lanes)[j].inbuf = 0;
+        (isection.lanes)[j].in_buf = 0;
     }          
 }
 
@@ -167,10 +167,11 @@ void *car_cross(void *arg) {
     }
 
     /*try to get access to the intersection (i.e make sure there is no other car on the path of first car in the buffer*/
-    struct car *first_car_in_line = l->buffer[head]; 
+    struct car *first_car_in_line = l->buffer[l->head]; 
     int *path = compute_path(first_car_in_line->in_dir, first_car_in_line->out_dir);
     if(path == NULL){
         printf("something is wrong with neither inplementation or car data\n");
+        pthread_mutex_unlock(&(l->lock)); 
         exit(1);
     }
     int i,section;
@@ -236,8 +237,8 @@ int *compute_path(enum direction in_dir, enum direction out_dir) {
     if(in_dir == NORTH){
        if(out_dir == NORTH){
            free(path);
-           printf("u-turn!\n")
-           exit(1);
+           printf("u-turn!\n");
+           return NULL;
        }else if(out_dir == SOUTH){
            path[0] = 2;
            path[1] = 3;
@@ -252,8 +253,8 @@ int *compute_path(enum direction in_dir, enum direction out_dir) {
            path[2] = 4;
        }else{
            free(path);
-           printf("invalid out_dir!\n")
-           exit(1);   
+           printf("invalid out_dir!\n");
+           return NULL;   
        }
     }else if(in_dir == SOUTH){
        if(out_dir == NORTH){
@@ -262,8 +263,8 @@ int *compute_path(enum direction in_dir, enum direction out_dir) {
            path[2] = -1; 
        }else if(out_dir == SOUTH){
            free(path);
-           printf("u-turn!\n")
-           exit(1);
+           printf("u-turn!\n");
+           return NULL;
        }else if(out_dir == WEST){
            path[0] = 1;
            path[1] = 2;
@@ -274,8 +275,8 @@ int *compute_path(enum direction in_dir, enum direction out_dir) {
            path[2] = -1;
        }else{
            free(path);
-           printf("invalid out_dir!\n")
-           exit(1);   
+           printf("invalid out_dir!\n");
+           return NULL;  
        }
     }else if(in_dir == WEST){
        if(out_dir == NORTH){
@@ -288,16 +289,16 @@ int *compute_path(enum direction in_dir, enum direction out_dir) {
            path[2] = -1; 
        }else if(out_dir == WEST){
            free(path);
-           printf("u-turn!\n")
-           exit(1);     
+           printf("u-turn!\n");
+           return NULL;    
        }else if(out_dir == EAST){
            path[0] = 3;
            path[1] = 4;
            path[2] = -1; 
        }else{
            free(path);
-           printf("invalid out_dir!\n")
-           exit(1);   
+           printf("invalid out_dir!\n");
+           return NULL;  
        }
     }else if(in_dir == EAST){
        if(out_dir == NORTH){
@@ -314,17 +315,17 @@ int *compute_path(enum direction in_dir, enum direction out_dir) {
            path[2] = -1;    
        }else if(out_dir == EAST){
            free(path);
-           printf("u-turn!\n")
-           exit(1); 
+           printf("u-turn!\n");
+           return NULL; 
        }else{
            free(path);
-           printf("invalid out_dir!\n")
-           exit(1);   
+           printf("invalid out_dir!\n");
+           return NULL;  
        }
     }else{
         free(path);
         printf("invalid in_dir!\n");
-        exit(1);
+        return NULL;
     }
     return path;
 }
