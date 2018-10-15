@@ -57,15 +57,33 @@ void parse_schedule(char *file_name) {
  */
 void init_intersection() {
     /*initialize p_thread_mutex*/    
-    int i;
+    int i,ret;
     for(i = 0; i < 4; i++){
-        pthread_mutex_init(&((isection.quad)[i]), NULL);
+        ret = pthread_mutex_init(&((isection.quad)[i]), NULL);
+        if(ret != 0){
+            printf("initialization of mutex fails\n");           
+            exit(ret);
+        }
     }
 
     /*initialize all four lanes*/
-    int j;
+    int j,ret1,ret2,ret3;
     for(j = 0; j < 4; j++){
-        pthread_mutex_init(&((isection.lanes)[j].lock), NULL);
+        ret1 = pthread_mutex_init(&((isection.lanes)[j].lock), NULL);
+        ret2 = pthread_cond_init(&((isection.lanes)[j].producer_cv),NULL);
+        ret3 = pthread_cond_init(&((isection.lanes)[j].consumer_cv),NULL);
+        if(ret1 != 0){
+            printf("initialization of mutex fails\n");           
+            exit(ret1);
+        }
+        if(ret2 != 0){
+            printf("initialization of producer_cv fails\n");           
+            exit(ret2);
+        }
+        if(ret3 != 0){
+            printf("initialization of consumer_cv fails\n");           
+            exit(ret3);
+        }
         (isection.lanes)[j].in_cars = NULL;
         (isection.lanes)[j].out_cars = NULL;
         (isection.lanes)[j].inc = 0;
