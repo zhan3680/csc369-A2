@@ -101,26 +101,27 @@ void *car_arrive(void *arg) {
     /* avoid compiler warning */
     l = l;
 
+    while(l->in_cars != NULL){
+	    /*move car form in_cars to buffer if there is space in buffer, wait otherwise*/
+	    pthread_mutex_lock(&(l->lock));  
 
-    /*move car form in_cars to buffer if there is space in buffer, wait otherwise*/
-    pthread_mutex_lock(&(l->lock));  
+	    /*check if there is space in the buffer*/
+	    while(l->in_buf == l->capacity){
+		pthread_cond_wait(&(l->producer_cv),&(l->lock));        
+	    }
 
-    /*check if there is space in the buffer*/
-    while(l->in_buf == l->capacity){
-        pthread_cond_wait(&(l->producer_cv),&(l->lock));        
+	    /*when space is available, move car from in_cars to buffer*/
+	    if(l->in_cars != NULL){
+		l->tail = (l->tail+1)%(l->capacity); 
+		(l->buffer)[l->tail] = l->in_cars;
+		l->in_cars = (l->in_cars)->next;
+		l->in_buf += 1;
+	    }
+
+	    /*don't forget to signal and release the lock*/
+	    pthread_cond_signal(&(l->consumer_cv));
+	    pthread_mutex_unlock(&(l->lock));
     }
-
-    /*when space is available, move car from in_cars to buffer*/
-    if(l->in_cars != NULL){
-        l->tail = (l->tail+1)%(l->capacity); 
-        (l->buffer)[l->tail] = l->in_cars;
-        l->in_cars = (l->in_cars)->next;
-        l->in_buf += 1;
-    }
-
-    /*don't forget to signal and release the lock*/
-    pthread_cond_signal(&(l->consumer_cv));
-    pthread_mutex_unlock(&(l->lock));
 
     return NULL;
 }
@@ -158,60 +159,67 @@ void *car_cross(void *arg) {
     /* avoid compiler warning */
     l = l;
 
-    /*try to get access to the intersection if there is car in the buffer, wait otherwise*/
-    pthread_mutex_lock(&(l->lock));
-    
-    /*check if there is any car waiting in the buffer*/    
-    while(l->in_buf == 0){
-        pthread_cond_wait(&(l->consumer_cv),&(l->lock));      
+    while(1){
+
+            /*all in_cars have finished crossing*/
+            if(l->in_cars == NULL && l->passed == l->inc){
+                break; 
+            }
+       
+	    /*try to get access to the intersection if there is car in the buffer, wait otherwise*/
+	    pthread_mutex_lock(&(l->lock));
+	    
+	    /*check if there is any car waiting in the buffer*/    
+	    while(l->in_buf == 0){
+		pthread_cond_wait(&(l->consumer_cv),&(l->lock));      
+	    }
+
+	    /*try to get access to the intersection (i.e make sure there is no other car on the path of first car in the buffer*/
+	    struct car *first_car_in_line = l->buffer[l->head]; 
+	    int *path = compute_path(first_car_in_line->in_dir, first_car_in_line->out_dir);
+	    if(path == NULL){
+		printf("something is wrong with neither inplementation or car data\n");
+		pthread_mutex_unlock(&(l->lock)); 
+		exit(1);
+	    }
+	    int i,section;
+	    for(i = 0; i < 3; i++){
+		section = path[i];
+		if(section != -1){
+		    pthread_mutex_lock(&((isection.quad)[section-1])); //section-1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
+		}
+	    }
+
+	    /*after we make sure that the path is clear, we can start crossing the intersection*/
+
+	    /*printing message*/
+	    printf("%d %d %d\n",first_car_in_line->in_dir, first_car_in_line->out_dir, first_car_in_line->id);
+	    
+	    /*add first car in line to out_cars of its out_dir*/
+	    struct lane *destination = &((isection.lanes)[first_car_in_line->out_dir]);
+	    first_car_in_line->next = destination->out_cars; 
+	    destination->out_cars = first_car_in_line;
+
+	    /*after finishing crossing the intersection, release the locks in opposite order in which they are acquired*/
+	    int j,section2;
+	    for(j = 2; j >= 0; j--){
+		section2 = path[j];
+		if(section2 != -1){
+		    pthread_mutex_unlock(&((isection.quad)[section2-1]));    //section2-1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		}
+	    }
+	    free(path);
+
+	    /*remove first car in line from buffer*/
+	    l->head = (l->head+1)%(l->capacity);
+	    l->in_buf -= 1;
+	    l->passed += 1; 
+	    
+	    /*don't forget to signal and release the lock*/
+	    pthread_cond_signal(&(l->producer_cv));
+	    pthread_mutex_unlock(&(l->lock)); 
     }
 
-    /*try to get access to the intersection (i.e make sure there is no other car on the path of first car in the buffer*/
-    struct car *first_car_in_line = l->buffer[l->head]; 
-    int *path = compute_path(first_car_in_line->in_dir, first_car_in_line->out_dir);
-    if(path == NULL){
-        printf("something is wrong with neither inplementation or car data\n");
-        pthread_mutex_unlock(&(l->lock)); 
-        exit(1);
-    }
-    int i,section;
-    for(i = 0; i < 3; i++){
-        section = path[i];
-        if(section != -1){
-            pthread_mutex_lock(&((isection.quad)[section-1])); //section-1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
-        }
-    }
-
-    /*after we make sure that the path is clear, we can start crossing the intersection*/
-
-    /*printing message*/
-    printf("%d %d %d\n",first_car_in_line->in_dir, first_car_in_line->out_dir, first_car_in_line->id);
-
-    /*after finishing crossing the intersection, release the locks in opposite order in which they are acquired*/
-    int j,section2;
-    for(j = 2; j >= 0; j--){
-        section2 = path[j];
-        if(section2 != -1){
-            pthread_mutex_unlock(&((isection.quad)[section2-1]));    //section2-1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        }
-    }
-    free(path);
-
-    /*remove first car in line from buffer*/
-    l->head = (l->head+1)%(l->capacity);
-    l->in_buf -= 1;
-    l->passed += 1; 
-    
-    /*don't forget to signal and release the lock*/
-    pthread_cond_signal(&(l->producer_cv));
-    pthread_mutex_unlock(&(l->lock)); 
-
-    /*add first car in line to out_cars of its out_dir*/
-    struct lane *destination = &((isection.lanes)[first_car_in_line->out_dir]);
-    pthread_mutex_lock(&(destination->lock));
-    first_car_in_line->next = destination->out_cars; 
-    destination->out_cars = first_car_in_line;
-    pthread_mutex_unlock(&(destination->lock));
 
     return NULL;
 }
